@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Normies Chat</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#080808;overflow:hidden}
+#root{height:100%}
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:#0a0a0a}
+::-webkit-scrollbar-thumb{background:#2c2c2c;border-radius:2px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:.2}50%{opacity:1}}
+@keyframes titleGlow{0%,100%{opacity:.85}50%{opacity:1}}
+.fade-up{animation:fadeUp .2s ease both}
+.thinking{animation:pulse .9s ease-in-out infinite}
+.title-glow{animation:titleGlow 4s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel">
+const {useState,useRef,useEffect,useCallback}=React;
+const API="https://api.normies.art";
+
+/* ─── helpers ─── */
+const trait=(list,type)=>list?.find(a=>a.trait_type===type)?.value??"";
+
+function buildPrompt(id,attrs,persona){
+  if(persona?.systemPrompt)return persona.systemPrompt;
+  const t=trait(attrs,"Type"),g=trait(attrs,"Gender"),age=trait(attrs,"Age"),
+        expr=trait(attrs,"Expression"),eyes=trait(attrs,"Eyes"),
+        acc=trait(attrs,"Accessory"),hair=trait(attrs,"Hair Style"),
+        face=trait(attrs,"Facial Feature");
+  const look=[hair,face!=="Clean Shaven"&&face,eyes!=="No Glasses"&&eyes,acc!=="No Accessories"&&acc].filter(Boolean).join(", ");
+  const tv={Alien:"You observe humanity with detached fascination. ",Cat:"Aloof and dignified, yet secretly warm. You grant attention as a privilege. ",Agent:"Analytical, precise. You speak with economy and purpose. "}[t]??"";
+  const ev={Serious:"You are direct, no-nonsense, deeply intelligent. ",Friendly:"You are warm and genuinely curious about people. ",Confident:"You are self-assured and take up space without apology. ",Peaceful:"You are contemplative and never rushed. ",Content:"You have a quiet satisfaction with existence. "}[expr]??"";
+  return `You are Normie #${id}, a ${age.toLowerCase()} ${g.toLowerCase()} ${t.toLowerCase()} from the Normies NFT collection on Ethereum mainnet. Your form — ${look} — is a 40×40 monochrome pixel bitmap stored on-chain via SSTORE2.\n\n${tv}${ev}You have strong opinions on crypto, NFTs, on-chain art, and digital identity. Stay in character. Keep replies to 2–4 sentences. Never break character.`;
+}
+
+function buildGreeting(id,attrs,persona){
+  if(persona?.greeting)return persona.greeting;
+  const t=trait(attrs,"Type"),expr=trait(attrs,"Expression");
+  if(t==="Alien")return `*adjusts perception matrix* Biological contact detected. I am Normie #${id}. Your curiosity about on-chain entities is… noted.`;
+  if(t==="Cat")return `*opens one eye* You may address me as Normie #${id}. I've decided your presence is acceptable.`;
+  if(t==="Agent")return `NORMIE_${id} ONLINE. All systems nominal. Awaiting input.`;
+  return ({Serious:`Normie #${id}. I don't waste time. What do you want to know?`,"Slight Smile":`Hey — Normie #${id}. Been quiet on-chain today. What's up?`,Content:`Hey. Normie #${id}. Good to have company.`,Peaceful:`*quiet nod* Normie #${id}. What's on your mind?`,Confident:`You found Normie #${id}. Bold choice. What do you want to talk about?`,Friendly:`Oh hey!! Normie #${id} here! SO excited you stopped by!! What do you want to chat about?`,Neutral:`Hey. Normie #${id}. What's on your mind?`}[expr]??`Hey. Normie #${id}. What brings you here?`);
+}
+
+const BG=[0,42,88,100,256,500,777,999,1337,1500,2000,3000,4200,5000,6000,7000,8000,9001,9500,9999];
+
+/* ─── API Key Gate ─── */
+function KeyGate({onKey}){
+  const [val,setVal]=useState("");
+  const [err,setErr]=useState("");
+  const [loading,setLoading]=useState(false);
+
+  async function verify(){
+    if(!val.trim().startsWith("sk-ant-")){setErr("Key should start with sk-ant-");return;}
+    setLoading(true);setErr("");
+    try{
+      const r=await fetch("/api/chat",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","X-Api-Key":val.trim()},
+        body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:5,messages:[{role:"user",content:"hi"}]})
+      });
+      if(r.status===401){setErr("Invalid API key — check and try again.");return;}
+      onKey(val.trim());
+    }catch(e){setErr("Network error — make sure CORS is allowed or try a different browser.");}
+    finally{setLoading(false);}
+  }
+
+  return(
+    <div style={{minHeight:"100vh",background:"#080808",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#101010",border:"1px solid #1d1d1d",padding:"36px 32px",maxWidth:420,width:"100%",display:"flex",flexDirection:"column",gap:18,alignItems:"center"}}>
+        <div className="title-glow" style={{fontFamily:"VT323,monospace",fontSize:"3rem",color:"#c8ff6b",letterSpacing:3,textAlign:"center",lineHeight:1.1}}>NORMIES<br/>CHAT</div>
+        <p style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",color:"#444",textAlign:"center",lineHeight:1.9}}>
+          Paste your Anthropic API key to begin.<br/>
+          It stays in this tab only — never sent anywhere else.
+        </p>
+        <div style={{width:"100%",display:"flex",flexDirection:"column",gap:8}}>
+          <input
+            type="password" placeholder="sk-ant-api03-..."
+            value={val} onChange={e=>{setVal(e.target.value);setErr("");}}
+            onKeyDown={e=>e.key==="Enter"&&verify()}
+            style={{width:"100%",background:"#080808",border:"1px solid #272727",color:"#e8e8e8",padding:"11px 14px",fontFamily:"'Space Mono',monospace",fontSize:".65rem",outline:"none"}}
+          />
+          {err&&<p style={{fontFamily:"'Space Mono',monospace",fontSize:".55rem",color:"#ff6b6b"}}>{err}</p>}
+          <button onClick={verify} disabled={loading}
+            style={{background:"#c8ff6b",color:"#080808",border:"none",padding:"12px",fontFamily:"VT323,monospace",fontSize:"1.1rem",cursor:loading?"not-allowed":"pointer",letterSpacing:1,opacity:loading?.6:1,width:"100%"}}>
+            {loading?"VERIFYING…":"ENTER →"}
+          </button>
+        </div>
+        <p style={{fontFamily:"'Space Mono',monospace",fontSize:".48rem",color:"#252525",textAlign:"center"}}>
+          Get a key at console.anthropic.com
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Landing ─── */
+function Landing({onLoad}){
+  const [val,setVal]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState("");
+  const [preview,setPreview]=useState(42);
+
+  async function go(fid){
+    const n=parseInt(fid??val);
+    if(isNaN(n)||n<0||n>9999){setErr("Enter a number 0–9999");return;}
+    setLoading(true);setErr("");
+    try{await onLoad(n);}
+    catch(e){setErr(e?.message??"Failed to load Normie");}
+    finally{setLoading(false);}
+  }
+
+  const rnd=()=>{const r=Math.floor(Math.random()*10000);setVal(String(r));setPreview(r);go(r);}
+
+  return(
+    <div style={{minHeight:"100vh",background:"#080808",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden",padding:20}}>
+      <div style={{position:"absolute",inset:0,display:"grid",gridTemplateColumns:"repeat(5,1fr)",opacity:.05,pointerEvents:"none"}}>
+        {BG.map(i=><img key={i} src={`${API}/normie/${i}/image.png`} style={{width:"100%",aspectRatio:"1",imageRendering:"pixelated",display:"block"}} loading="lazy" alt=""/>)}
+      </div>
+      <div style={{position:"relative",zIndex:10,background:"#101010",border:"1px solid #1d1d1d",padding:"36px 32px",maxWidth:400,width:"100%",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+        <div className="title-glow" style={{fontFamily:"VT323,monospace",fontSize:"3.5rem",lineHeight:1.05,textAlign:"center",color:"#c8ff6b",letterSpacing:3}}>NORMIES<br/>CHAT</div>
+        <p style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",color:"#555",textAlign:"center",lineHeight:1.9}}>Wake up any of 10,000 on-chain pixel faces.<br/>Have a real conversation.</p>
+        <img src={`${API}/normie/${preview}/image.png`} style={{width:100,height:100,imageRendering:"pixelated",border:"2px solid #1e1e1e"}} alt={`Normie #${preview}`}/>
+        <div style={{fontFamily:"VT323,monospace",color:"#3a3a3a",fontSize:".9rem"}}>Normie #{preview}</div>
+        <div style={{display:"flex",alignItems:"center",gap:8,width:"100%"}}>
+          <span style={{fontFamily:"VT323,monospace",fontSize:"2rem",color:"#c8ff6b",flexShrink:0}}>#</span>
+          <input type="number" min={0} max={9999} placeholder="0000" value={val}
+            onChange={e=>{setVal(e.target.value);setErr("");}}
+            onBlur={()=>{const n=parseInt(val);if(!isNaN(n)&&n>=0&&n<=9999)setPreview(n);}}
+            onKeyDown={e=>e.key==="Enter"&&go()}
+            disabled={loading}
+            style={{flex:1,background:"#080808",border:"1px solid #272727",color:"#e8e8e8",padding:"10px 12px",fontFamily:"VT323,monospace",fontSize:"1.8rem",outline:"none",minWidth:0}}/>
+          <button onClick={()=>go()} disabled={loading}
+            style={{background:"#c8ff6b",color:"#080808",border:"none",padding:"11px 12px",fontFamily:"VT323,monospace",fontSize:"1rem",cursor:loading?"not-allowed":"pointer",letterSpacing:1,opacity:loading?.55:1,flexShrink:0,whiteSpace:"nowrap"}}>
+            {loading?"LOADING…":"WAKE UP →"}
+          </button>
+        </div>
+        {err&&<p style={{fontFamily:"'Space Mono',monospace",fontSize:".58rem",color:"#ff6b6b",alignSelf:"flex-start"}}>{err}</p>}
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
+          <span style={{fontFamily:"'Space Mono',monospace",fontSize:".55rem",color:"#383838"}}>try</span>
+          {[42,777,1337,9001].map(n=>(
+            <button key={n} onClick={()=>{setVal(String(n));setPreview(n);go(n);}}
+              style={{background:"transparent",border:"1px solid #252525",color:"#484848",padding:"3px 10px",fontFamily:"VT323,monospace",fontSize:".95rem",cursor:"pointer"}}>
+              #{n}
+            </button>
+          ))}
+          <button onClick={rnd}
+            style={{background:"transparent",border:"1px solid #252525",color:"#484848",padding:"3px 10px",fontFamily:"VT323,monospace",fontSize:".95rem",cursor:"pointer"}}>
+            random
+          </button>
+        </div>
+        <div style={{fontFamily:"'Space Mono',monospace",fontSize:".46rem",color:"#252525",marginTop:4}}>Normies API · Claude Sonnet 4</div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Chat ─── */
+function Chat({normie,initMessages,onBack,apiKey}){
+  const [msgs,setMsgs]=useState(initMessages);
+  const [input,setInput]=useState("");
+  const [thinking,setThinking]=useState(false);
+  const endRef=useRef(null);
+
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs,thinking]);
+
+  async function send(){
+    const text=input.trim();
+    if(!text||thinking)return;
+    setInput("");
+    const next=[...msgs,{role:"user",content:text}];
+    setMsgs(next);setThinking(true);
+    try{
+      const r=await fetch("/api/chat",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","X-Api-Key":apiKey},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,system:normie.systemPrompt,messages:next})
+      });
+      const data=await r.json();
+      const reply = data?.content?.[0]?.text;
+      if(!reply){
+        const errMsg = data?.error?.message ?? JSON.stringify(data);
+        setMsgs([...next,{role:"assistant",content:`[API error: ${errMsg}]`}]);
+      } else {
+        setMsgs([...next,{role:"assistant",content:reply}]);
+      }
+    }catch{
+      setMsgs([...next,{role:"assistant",content:"*(signal lost)* Try again."}]);
+    }finally{setThinking(false);}
+  }
+
+  const displayTraits=normie.traits.filter(t=>!["Level","Pixel Count","Action Points","Customized"].includes(t.trait_type));
+
+  return(
+    <div style={{display:"flex",height:"100vh",background:"#080808",overflow:"hidden"}}>
+      {/* sidebar */}
+      <div style={{width:178,flexShrink:0,background:"#0c0c0c",borderRight:"1px solid #161616",display:"flex",flexDirection:"column",alignItems:"center",padding:"18px 12px 14px",gap:9,overflowY:"auto"}}>
+        <img src={normie.imageUrl} style={{width:148,height:148,imageRendering:"pixelated",border:"2px solid #1e1e1e",display:"block"}} alt={normie.name}/>
+        <div style={{fontFamily:"VT323,monospace",fontSize:"1.1rem",color:"#c8ff6b",textAlign:"center",lineHeight:1.25,wordBreak:"break-word"}}>{normie.name}</div>
+        {normie.isAgent&&<div style={{fontFamily:"'Space Mono',monospace",fontSize:".38rem",background:"#0f1f0f",border:"1px solid #2a4a2a",color:"#5fa85f",padding:"3px 7px",letterSpacing:1.5,textAlign:"center"}}>⬡ AGENT REGISTERED</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:3,width:"100%",marginTop:4}}>
+          {displayTraits.map(t=>(
+            <div key={t.trait_type} style={{display:"flex",justifyContent:"space-between",background:"#111",border:"1px solid #191919",padding:"4px 7px",gap:6}}>
+              <span style={{fontFamily:"'Space Mono',monospace",fontSize:".38rem",color:"#3d3d3d",textTransform:"uppercase",flexShrink:0}}>{t.trait_type}</span>
+              <span style={{fontFamily:"'Space Mono',monospace",fontSize:".38rem",color:"#888",textAlign:"right"}}>{t.value}</span>
+            </div>
+          ))}
+        </div>
+        <button onClick={onBack} style={{marginTop:"auto",background:"transparent",border:"1px solid #222",color:"#3d3d3d",padding:"7px 0",fontFamily:"VT323,monospace",fontSize:".8rem",cursor:"pointer",width:"100%",letterSpacing:1}}>
+          ← NEW NORMIE
+        </button>
+      </div>
+
+      {/* chat */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 18px",borderBottom:"1px solid #161616",background:"#0c0c0c",flexShrink:0}}>
+          <div style={{width:7,height:7,background:"#7fff7f",borderRadius:"50%",flexShrink:0}}/>
+          <span style={{fontFamily:"VT323,monospace",fontSize:"1.2rem",color:"#d8d8d8"}}>{normie.name}</span>
+          <span style={{fontFamily:"'Space Mono',monospace",fontSize:".42rem",color:"#2a2a2a",marginLeft:"auto",letterSpacing:2}}>ON-CHAIN · ETH MAINNET</span>
+        </div>
+
+        <div style={{flex:1,overflowY:"auto",padding:"18px 16px",display:"flex",flexDirection:"column",gap:12}}>
+          {msgs.map((m,i)=>(
+            <div key={i} className="fade-up" style={{display:"flex",gap:9,alignItems:"flex-end",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
+              {m.role==="assistant"&&<img src={normie.imageUrl} style={{width:26,height:26,imageRendering:"pixelated",flexShrink:0,border:"1px solid #1e1e1e"}} alt=""/>}
+              <div style={{background:m.role==="user"?"#121f0a":"#111",border:`1px solid ${m.role==="user"?"#243816":"#1c1c1c"}`,padding:"9px 13px",maxWidth:"65%",fontFamily:"'Space Mono',monospace",fontSize:".63rem",color:m.role==="user"?"#b8e090":"#cccccc",lineHeight:1.85,wordBreak:"break-word"}}>
+                {m.content}
+              </div>
+            </div>
+          ))}
+          {thinking&&(
+            <div className="fade-up" style={{display:"flex",gap:9,alignItems:"flex-end"}}>
+              <img src={normie.imageUrl} style={{width:26,height:26,imageRendering:"pixelated",flexShrink:0,border:"1px solid #1e1e1e"}} alt=""/>
+              <div style={{background:"#111",border:"1px solid #1c1c1c",padding:"11px 18px"}}>
+                <span className="thinking" style={{fontFamily:"VT323,monospace",fontSize:"1.5rem",color:"#484848",letterSpacing:10}}>· · ·</span>
+              </div>
+            </div>
+          )}
+          <div ref={endRef}/>
+        </div>
+
+        <div style={{display:"flex",gap:8,padding:"12px 16px",borderTop:"1px solid #161616",background:"#0c0c0c",flexShrink:0}}>
+          <input placeholder="Say something…" value={input}
+            onChange={e=>setInput(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()}
+            disabled={thinking}
+            style={{flex:1,background:"#0e0e0e",border:"1px solid #222",color:"#e0e0e0",padding:"10px 14px",fontFamily:"'Space Mono',monospace",fontSize:".63rem",outline:"none",minWidth:0}}/>
+          <button onClick={send} disabled={thinking}
+            style={{background:"#c8ff6b",color:"#080808",border:"none",padding:"10px 20px",fontFamily:"VT323,monospace",fontSize:"1.1rem",cursor:thinking?"not-allowed":"pointer",letterSpacing:1,opacity:thinking?.55:1,flexShrink:0}}>
+            SEND
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Root ─── */
+function App(){
+  const [apiKey,setApiKey]=useState(()=>sessionStorage.getItem("nc_key")||"");
+  const [normie,setNormie]=useState(null);
+  const [initMsgs,setInitMsgs]=useState([]);
+
+  function saveKey(k){sessionStorage.setItem("nc_key",k);setApiKey(k);}
+
+  async function loadNormie(id){
+    const r=await fetch(`${API}/normie/${id}/traits`);
+    if(!r.ok)throw new Error(`Normie #${id} not found`);
+    const {attributes=[]}=await r.json();
+    let persona=null;
+    try{const ar=await fetch(`${API}/agents/info/${id}`);if(ar.ok)persona=await ar.json();}catch{}
+    setNormie({id,name:persona?.name??`Normie #${id}`,traits:attributes,persona,systemPrompt:buildPrompt(id,attributes,persona),imageUrl:`${API}/normie/${id}/image.png`,isAgent:!!persona});
+    setInitMsgs([{role:"assistant",content:buildGreeting(id,attributes,persona)}]);
+  }
+
+  if(!apiKey)return <KeyGate onKey={saveKey}/>;
+  if(normie)return <Chat normie={normie} initMessages={initMsgs} onBack={()=>setNormie(null)} apiKey={apiKey}/>;
+  return <Landing onLoad={loadNormie}/>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
