@@ -272,7 +272,7 @@ function Chat({normie,initMessages,onBack,apiKey}){
 
 /* ─── Root ─── */
 function App(){
-  const [apiKey,setApiKey]=useState(()=>sessionStorage.getItem("nc_key")||"");
+  const apiKey="server";
   const [normie,setNormie]=useState(null);
   const [initMsgs,setInitMsgs]=useState([]);
 
@@ -288,7 +288,7 @@ function App(){
     setInitMsgs([{role:"assistant",content:buildGreeting(id,attributes,persona)}]);
   }
 
-  if(!apiKey)return <KeyGate onKey={saveKey}/>;
+  
   if(normie)return <Chat normie={normie} initMessages={initMsgs} onBack={()=>setNormie(null)} apiKey={apiKey}/>;
   return <Landing onLoad={loadNormie}/>;
 }
